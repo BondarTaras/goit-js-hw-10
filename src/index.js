@@ -1,75 +1,65 @@
-import './css/styles.css';
+import { fetchBreeds, fetchCatByBreed } from './cat-api.js';
+
 import Notiflix from 'notiflix';
-const debounce = require('lodash.debounce');
-import API from './js/fetch-countries.js';
-import getRefs from './js/get-refs.js';
 
-const DEBOUNCE_DELAY = 300;
+const breedSelect = document.querySelector('.breed-select');
+const catInfo = document.querySelector('.cat-info');
+const error = document.querySelector('.error');
+const loader = document.querySelector('.loader');
 
-const refs = getRefs();
-
-refs.searchInput.addEventListener('input', debounce(onSearch, DEBOUNCE_DELAY));
-
-function onSearch(evn) {
-  evn.preventDefault();
-  const searchQuery = evn.target.value.trim();
-  console.log(evn.target.value);
-  clearMarkup();
-
-  if (searchQuery) {
-    API.fetchCountries(searchQuery)
-        .then(makeMarkup)
-        .catch(onFetchError);
-  }
+function showLoader() {
+  loader.style.display = 'block';
+  breedSelect.style.display = 'none';
 }
 
-function makeMarkup(countries) {
-  if (countries.length === 1) {
-    renderMarkupItem(countries);
-  } else if (countries.length >= 2 && countries.length <= 10) {
-    renderMarkupList(countries);
-  } else {
-    Notiflix.Notify.info(
-      'Too many matches found. Please enter a more specific name.'
-    );
-  }
-  return;
+function hideLoader() {
+  loader.style.display = 'none';
+  breedSelect.style.display = 'block';
 }
 
-function renderMarkupList(countries) {
-  const markupList = countries
-    .map(({ name, flags }) => {
-      return `<li class="country-item">
-                <img src="${flags.svg}" width="36" height="24" alt="${name}">
-                <h2 class="country-item-title">${name.official}</h2>
-             </li>`;
+function showError(message) {
+  Notiflix.Notify.failure(message);
+
+}
+
+showLoader();
+
+fetchBreeds()
+  .then(breeds => {
+    const breedOptions = breeds.map(({ id, name }) => {
+      const option = document.createElement('option');
+      option.value = id;
+      option.textContent = name;
+      return option;
+    });
+    breedSelect.append(...breedOptions);
+    hideLoader();
+  })
+  .catch(error => {
+    console.log('Произошла ошибка:', error);
+    hideLoader();
+    showError('Oops! Something went wrong! Try reloading the page!');
+  });
+
+breedSelect.addEventListener('change', () => {
+  const selectedBreedId = breedSelect.value;
+
+  showLoader();
+
+  fetchCatByBreed(selectedBreedId)
+    .then(catData => {
+      catInfo.innerHTML = `
+        <img src="${catData.url}" alt="Cat Image" width="700" height="500">
+        <h3>${catData.breeds[0].name}</h3>
+        <p><strong>Description:</strong> ${catData.breeds[0].description}</p>
+        <p><strong>Temperament:</strong> ${catData.breeds[0].temperament}</p>
+      `;
     })
-    .join('');
-  refs.countryList.innerHTML = markupList;
-}
-
-function renderMarkupItem(countries) {
-  const markupItem = countries
-    .map(({ name, flags, capital, population, languages }) => {
-      const languagesList = Object.values(languages).join(', ');
-      return `<div class="country-item-wrap">
-                  <img src="${flags.svg}" width="36" height="24" alt="${name}">
-                  <h2 class="country-item-title">${name.official}</h2>
-               </div>
-               <p><b>Capital:</b>${capital}</p>
-               <p><b>Population:</b>${population}</p>
-               <p><b>Languages:</b>${languagesList}</p>`;
+    .catch(error => {
+      console.log('Произошла ошибка:', error);
+      showError('Oops! Something went wrong!');
     })
-    .join('');
-  refs.countryItem.innerHTML = markupItem; //refs.countryItem.insertAdjacentHTML('beforeend', markup);
-}
-
-function clearMarkup() {
-  refs.countryItem.innerHTML = '';
-  refs.countryList.innerHTML = '';
-}
-
-function onFetchError(error) {
-  console.error(error);
-  Notiflix.Notify.failure('Oops, there is no country with that name');
-}
+    .finally(() => {
+      hideLoader();
+    });
+});
